@@ -1,9 +1,7 @@
 Authors: AidenPan, lhxchifan
 Date: March, 2023
 
-<img src="[markdownmonstericon.png](https://drive.google.com/file/d/1FRvu7y99OxZG_RRNAKcGMPtwoTgDAA_4/view?usp=sharing)"
-     alt="Markdown Monster icon"
-     style="float: left; margin-right: 10px;" />
+![alt text](http://url/to/img.png)
 
 This project is for ECE 740 B03 2023 Winter.
 
