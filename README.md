@@ -1,7 +1,7 @@
 Authors: AidenPan, lhxchifan
 Date: March, 2023
 
-![alt text](http://url/to/img.png)
+![A2A]([http://url/to/img.png](https://github.com/ZhenglinPan/a2a/blob/master/others/readme_A2A.png))
 
 This project is for ECE 740 B03 2023 Winter.
 
