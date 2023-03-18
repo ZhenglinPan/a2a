@@ -1,5 +1,6 @@
-Authors: AidenPan, lhxchifan
-Date: March, 2023
+*Authors: AidenPan, lhxchifan*
+
+*Date: March, 2023*
 
 ![A2A](https://github.com/ZhenglinPan/a2a/blob/master/others/readme_A2A.png)
 
