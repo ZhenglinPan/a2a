@@ -62,6 +62,11 @@ def train(config):
     test_loader = DataLoader(test_ds, batch_size=config['batch_size'], shuffle = True)
     model = resnet18(pretrained=True)
     model.fc = Linear(in_features=512, out_features=10)
+
+    for param in model.parameters():
+      param.requires_grad = False
+    for param in model.fc.parameters():
+      param.requires_grad = True
     model = model.to(device)
 
     # Optimiser
