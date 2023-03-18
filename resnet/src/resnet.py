@@ -3,6 +3,8 @@ from time import time
 from tqdm import tqdm
 import numpy
 
+import wandb
+
 import torch
 from torch.nn import Linear, CrossEntropyLoss
 from torch.optim import Adam
@@ -118,15 +120,19 @@ def train(config):
         end = time()
         duration = (end - start) / 60
         
+        wandb.log({"train acc": ep_tr_acc, "loss": loss, "test acc": ep_test_acc})
+        
         print(f"Epoch: {epoch}, Time: {duration}, Loss: {loss}\nTrain_acc: {ep_tr_acc}, Test_acc: {ep_test_acc}")
-
+        
+        torch.save(model.state_dict(), "cifar10_epoch"+str(epoch)+'_train'+str(ep_tr_acc)+'_test'+str(ep_test_acc)+".pt")
 
 if __name__ == '__main__':
     args = parse_args()
     config = load_config(args.config)
+    
+    # if config['use_wandb']:
+        # wandb.init(project=config['wandb_project'], config=config)
 
-    if config['use_wandb']:
-        import wandb
-        wandb.init(project=config['wandb_project'], config=config)
+    wandb.init(project="CIFAR10")
 
     train(config)
