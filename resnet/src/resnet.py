@@ -45,35 +45,35 @@ def train(config):
         transforms.Normalize(mean, std)
     ])
 
+    model = resnet18(pretrained=False)
+
     if config['dataset'] == 'cifar10':
         train_ds = CIFAR10(root='./data', train=True, download=True, transform=tfm)
         test_ds = CIFAR10(root='./data', train=False, download=True, transform=tfm)
         LEN_TRAIN = len(train_ds)
         LEN_TEST = len(test_ds)
-        classDict = {'plane': 0, 'car': 1, 'bird': 2, 'cat': 3, 'deer': 4,
-                'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
+        model.fc = Linear(in_features=512, out_features=10)
     elif config['dataset'] == 'cifar100':
         train_ds = CIFAR100(root='./data', train=True, download=True, transform=tfm)
         test_ds = CIFAR100(root='./data', train=False, download=True, transform=tfm)
         LEN_TRAIN = len(train_ds)
         LEN_TEST = len(test_ds)
-        classDict = {'plane': 0, 'car': 1, 'bird': 2, 'cat': 3, 'deer': 4,
-                'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9}
+        model.fc = Linear(in_features=512, out_features=100)
 
     train_loader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
     test_loader = DataLoader(test_ds, batch_size=config['batch_size'], shuffle = True)
-    model = resnet18(pretrained=True)
-    model.fc = Linear(in_features=512, out_features=10)
 
-    for param in model.parameters():
-      param.requires_grad = False
-    for param in model.fc.parameters():
-      param.requires_grad = True
+
+    # for param in model.parameters():
+    #   param.requires_grad = False
+    # for param in model.fc.parameters():
+    #   param.requires_grad = True
     model = model.to(device)
 
     # Optimiser
-    optimiser = Adam(model.parameters(), lr=config['learning_rate'], weight_decay=0.0001)
-
+    optimizer = Adam(model.parameters(), lr=config['learning_rate'], weight_decay=0.0001)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9)
+    lr_scheduler_decay = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
     # Loss Function
     loss_fn = CrossEntropyLoss()
 
@@ -88,7 +88,7 @@ def train(config):
         
         with tqdm(train_loader, unit="batch") as tepoch:
             for xtrain, ytrain in tepoch:
-                optimiser.zero_grad()
+                optimizer.zero_grad()
                 
                 xtrain = xtrain.to(device)
                 train_prob = model(xtrain)
@@ -96,7 +96,7 @@ def train(config):
                 
                 loss = loss_fn(train_prob, ytrain)
                 loss.backward()
-                optimiser.step()
+                optimizer.step()
                 
                 # training ends
                 
@@ -117,6 +117,8 @@ def train(config):
                 test_acc += int(torch.sum(test_pred == ytest))
             ep_test_acc = test_acc / LEN_TEST
         
+        lr_scheduler_decay.step()
+        
         end = time()
         duration = (end - start) / 60
         
@@ -124,15 +126,18 @@ def train(config):
         
         print(f"Epoch: {epoch}, Time: {duration}, Loss: {loss}\nTrain_acc: {ep_tr_acc}, Test_acc: {ep_test_acc}")
         
-        torch.save(model.state_dict(), "cifar10_epoch"+str(epoch)+'_train'+str(ep_tr_acc)+'_test'+str(ep_test_acc)+".pt")
+        if (epoch + 1) % config['save_epochs'] == 0:
+            torch.save(model.state_dict(), config['save_path'] + "epoch"+str(epoch)+'_train'+str(ep_tr_acc)+'_test'+str(ep_test_acc)+".pt")
 
 if __name__ == '__main__':
     args = parse_args()
     config = load_config(args.config)
     
-    # if config['use_wandb']:
-        # wandb.init(project=config['wandb_project'], config=config)
+    if config['use_wandb']:
+        wandb.init(project=config['wandb_project'], config=config)
 
-    wandb.init(project="CIFAR10")
-
+    path = 'resnet/models/' + config['train_id'] + '/'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    config['save_path'] = path
     train(config)
