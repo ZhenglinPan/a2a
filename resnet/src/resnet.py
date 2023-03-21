@@ -1,143 +1,115 @@
-import os
-from time import time
-from tqdm import tqdm
-import numpy
-
-import wandb
-
 import torch
-from torch.nn import Linear, CrossEntropyLoss
-from torch.optim import Adam
-from torch.utils.data import DataLoader
-
-import torchvision
-from torchvision.datasets import ImageFolder
-from torchvision.models import resnet18
-from torchvision.transforms import transforms
-
-from utils import parse_args, load_config
-
-from torchvision.datasets import CIFAR10, CIFAR100
-from torch.utils.data import Dataset, DataLoader
-
-CIFAR100_TRAIN_MEAN = (0.5070751592371323, 0.48654887331495095, 0.4409178433670343)
-CIFAR100_TRAIN_STD = (0.2673342858792401, 0.2564384629170883, 0.27615047132568404)
-
-CIFAR10_TRAIN_MEAN = (0.49139968, 0.48215827, 0.44653124)
-CIFAR10_TRAIN_STD = (0.24703233, 0.24348505, 0.26158768)
-
-def train(config):
-    # Device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    if config['dataset'] == 'cifar10':
-        mean = CIFAR10_TRAIN_MEAN
-        std = CIFAR10_TRAIN_STD
-    elif config['dataset'] == 'cifar100':
-        mean = CIFAR100_TRAIN_MEAN
-        std = CIFAR100_TRAIN_STD
-
-    tfm = transforms.Compose([
-        transforms.Resize((224, 224)),
-        # transforms.RandomHorizontalFlip(),
-        # transforms.RandomRotation(degrees=10),
-        transforms.ToTensor(),
-        transforms.Normalize(mean, std)
-    ])
-
-    model = resnet18(pretrained=False)
-
-    if config['dataset'] == 'cifar10':
-        train_ds = CIFAR10(root='./data', train=True, download=True, transform=tfm)
-        test_ds = CIFAR10(root='./data', train=False, download=True, transform=tfm)
-        LEN_TRAIN = len(train_ds)
-        LEN_TEST = len(test_ds)
-        model.fc = Linear(in_features=512, out_features=10)
-    elif config['dataset'] == 'cifar100':
-        train_ds = CIFAR100(root='./data', train=True, download=True, transform=tfm)
-        test_ds = CIFAR100(root='./data', train=False, download=True, transform=tfm)
-        LEN_TRAIN = len(train_ds)
-        LEN_TEST = len(test_ds)
-        model.fc = Linear(in_features=512, out_features=100)
-
-    train_loader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=config['batch_size'], shuffle = True)
+import torch.nn as nn
+import torch.nn.functional as F
 
 
-    # for param in model.parameters():
-    #   param.requires_grad = False
-    # for param in model.fc.parameters():
-    #   param.requires_grad = True
-    model = model.to(device)
+class BasicBlock(nn.Module):
+    expansion = 1
 
-    # Optimiser
-    optimizer = Adam(model.parameters(), lr=config['learning_rate'], weight_decay=0.0001)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9)
-    lr_scheduler_decay = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
-    # Loss Function
-    loss_fn = CrossEntropyLoss()
+    def __init__(self, in_planes, planes, stride=1):
+        super(BasicBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
 
-    for epoch in range(config['epochs']):
-        start = time()
-        
-        tr_acc = 0
-        test_acc = 0
-        
-        # Train
-        model.train()
-        
-        with tqdm(train_loader, unit="batch") as tepoch:
-            for xtrain, ytrain in tepoch:
-                optimizer.zero_grad()
-                
-                xtrain = xtrain.to(device)
-                train_prob = model(xtrain)
-                train_prob = train_prob.cpu()
-                
-                loss = loss_fn(train_prob, ytrain)
-                loss.backward()
-                optimizer.step()
-                
-                # training ends
-                
-                train_pred = torch.max(train_prob, 1).indices
-                tr_acc += int(torch.sum(train_pred == ytrain))
-                
-            ep_tr_acc = tr_acc / LEN_TRAIN
-        
-        # Evaluate
-        model.eval()
-        with torch.no_grad():
-            for xtest, ytest in test_loader:
-                xtest = xtest.to(device)
-                test_prob = model(xtest)
-                test_prob = test_prob.cpu()
-                
-                test_pred = torch.max(test_prob,1).indices
-                test_acc += int(torch.sum(test_pred == ytest))
-            ep_test_acc = test_acc / LEN_TEST
-        
-        lr_scheduler_decay.step()
-        
-        end = time()
-        duration = (end - start) / 60
-        
-        wandb.log({"train acc": ep_tr_acc, "loss": loss, "test acc": ep_test_acc})
-        
-        print(f"Epoch: {epoch}, Time: {duration}, Loss: {loss}\nTrain_acc: {ep_tr_acc}, Test_acc: {ep_test_acc}")
-        
-        if (epoch + 1) % config['save_epochs'] == 0:
-            torch.save(model.state_dict(), config['save_path'] + "epoch"+str(epoch)+'_train'+str(ep_tr_acc)+'_test'+str(ep_test_acc)+".pt")
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion * planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion * planes)
+            )
 
-if __name__ == '__main__':
-    args = parse_args()
-    config = load_config(args.config)
-    
-    if config['use_wandb']:
-        wandb.init(project=config['wandb_project'], config=config)
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
 
-    path = 'resnet/models/' + config['train_id'] + '/'
-    if not os.path.exists(path):
-        os.makedirs(path)
-    config['save_path'] = path
-    train(config)
+
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, self.expansion * planes, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(self.expansion * planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion * planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion * planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
+
+class ResNet(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10):
+        super(ResNet, self).__init__()
+        self.in_planes = 64
+
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
+        self.linear = nn.Linear(512 * block.expansion, num_classes)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
+
+
+def ResNet18(classes=10):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes = classes)
+
+
+def ResNet34():
+    return ResNet(BasicBlock, [3, 4, 6, 3])
+
+
+def ResNet50():
+    return ResNet(Bottleneck, [3, 4, 6, 3])
+
+
+def ResNet101():
+    return ResNet(Bottleneck, [3, 4, 23, 3])
+
+
+def ResNet152():
+    return ResNet(Bottleneck, [3, 8, 36, 3])
+
+
+def test():
+    net = ResNet18()
+    y = net(torch.randn(1, 3, 32, 32))
+    print(y.size())
