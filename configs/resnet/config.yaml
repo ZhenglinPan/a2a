@@ -1,6 +1,6 @@
 learning_rate: 0.001
 batch_size: 64
-epochs: 100
+epochs: 60
 use_wandb: true
 dataset: cifar100
 wandb_project: cifar100

@@ -14,8 +14,12 @@ import torchvision
 from torchvision.datasets import ImageFolder
 from torchvision.models import resnet18
 from torchvision.transforms import transforms
-
-from utils import parse_args, load_config
+from pathlib import Path
+import sys
+path_root = Path(__file__).parents[2]
+sys.path.append(str(path_root))
+print(sys.path)
+from util.utils import parse_args, load_config
 
 from torchvision.datasets import CIFAR10, CIFAR100
 from torch.utils.data import Dataset, DataLoader
@@ -78,7 +82,6 @@ def train(config):
         LEN_TRAIN = len(train_ds)
         LEN_TEST = len(test_ds)
         classes = 10
-        
     elif config['dataset'] == 'cifar100':
         train_ds = CIFAR100(root='./data', train=True, download=True, transform=train_tfm)
         test_ds = CIFAR100(root='./data', train=False, download=True, transform=test_tfm)
@@ -93,7 +96,7 @@ def train(config):
     print(model)
     
     train_loader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
-    test_loader = DataLoader(test_ds, batch_size=config['batch_size'], shuffle = True)
+    test_loader = DataLoader(test_ds, batch_size=config['batch_size'], shuffle=False)
 
 
     # for param in model.parameters():
