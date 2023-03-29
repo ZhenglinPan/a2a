@@ -1,8 +1,8 @@
-learning_rate: 0.001
-batch_size: 64
-epochs: 60
+learning_rate: 0.04
+batch_size: 128
+epochs: 200
 use_wandb: true
 dataset: cifar100
 wandb_project: cifar100
 save_epochs: 20
-train_id: cifar100_ADAM
+train_id: cifar100_SGD_0.04

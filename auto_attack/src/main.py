@@ -59,29 +59,41 @@ def attack(config):
     # test_ds.
     # input = rearrange(test_ds.data, 'n s b d -> n d s b')
     # i2 = test_tfm(test_ds.data)
-  #  x_adv = adversary.run_standard_evaluation(torch.tensor(rearrange(test_ds.data, 'n s b d -> n d s b')), torch.tensor(test_ds.targets), bs=config['batch_size'])
+    # x_adv = adversary.run_standard_evaluation(torch.tensor(rearrange(test_ds.data, 'n s b d -> n d s b')), torch.tensor(test_ds.targets), bs=config['batch_size'])
 
-    idx = 0
-    with torch.no_grad():
-        # for xtest, ytest in zip(x_adv, test_ds.targets):
-        for xtest, ytest in test_loader:
-            xtest = xtest.to(device)
-            ytest_input = ytest.to(device)
-            test_prob = model(xtest)
-            test_prob = test_prob.cpu()
-            test_pred = torch.max(test_prob,1).indices
+    transformed_data = test_ds.data
 
-            x_adv = adversary.run_standard_evaluation(xtest, ytest_input, bs=config['batch_size'])
-            x_adv = x_adv.to(device)
-            adv_prob = model(x_adv)
-            adv_prob = adv_prob.cpu()
+    mean = numpy.mean(transformed_data, axis=(0, 1, 2))
+    std = numpy.std(transformed_data, axis=(0, 1, 2))
+
+    # Normalize the batch by subtracting the mean and dividing by the standard deviation
+    transformed_data = (transformed_data - mean) / std
+    adv_complete = adversary.run_standard_evaluation(torch.tensor(rearrange(transformed_data, 'n s b d -> n d s b')).type(torch.FloatTensor),
+                torch.tensor(test_ds.targets), bs=config['batch_size'])
+    
+    torch.save(adv_complete, '{}/{}_{}_individual_1_{}_eps_{:.5f}_plus_{}.pth'.format(
+                config['save_dir'], 'aa', 1, 10000, config['eps'], config['dataset']))
+    # idx = 0
+    # with torch.no_grad():
+    #     # for xtest, ytest in zip(x_adv, test_ds.targets):
+    #     for xtest, ytest in test_loader:
+    #         xtest = xtest.to(device)
+    #         ytest_input = ytest.to(device)
+    #         test_prob = model(xtest)
+    #         test_prob = test_prob.cpu()
+    #         test_pred = torch.max(test_prob,1).indices
+
+    #         x_adv = adversary.run_standard_evaluation(xtest, ytest_input, bs=config['batch_size'])
+    #         x_adv = x_adv.to(device)
+    #         adv_prob = model(x_adv)
+    #         adv_prob = adv_prob.cpu()
             
-            adv_pred = torch.max(adv_prob,1).indices
-            test_acc += int(torch.sum(test_pred == adv_pred))
-            idx += 1
-            print(f"current finished {idx}")
-        ep_test_acc = test_acc / LEN_TEST
-        print(f"Test_acc: {ep_test_acc}")
+    #         adv_pred = torch.max(adv_prob,1).indices
+    #         test_acc += int(torch.sum(test_pred == adv_pred))
+    #         idx += 1
+    #         print(f"current finished {idx}")
+    #     ep_test_acc = test_acc / LEN_TEST
+    #     print(f"Test_acc: {ep_test_acc}")
 
 if __name__ == '__main__':
     args = parse_args()

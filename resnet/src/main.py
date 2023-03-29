@@ -59,8 +59,9 @@ def train(config):
 
     train_tfm = transforms.Compose([
         # transforms.Resize((224, 224)),
+        transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
-        transforms.RandomRotation(degrees=10),
+        # transforms.RandomRotation(degrees=10),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
@@ -112,11 +113,12 @@ def train(config):
     print(f"{total_trainable_params:,} training parameters.")
 
     # Optimiser
-    optimizer = Adam(model.parameters(), lr=config['learning_rate'], weight_decay=0.0001)
-    # optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9, weight_decay=5e-4)
+    # optimizer = Adam(model.parameters(), lr=config['learning_rate'], weight_decay=0.0001)
+    optimizer = torch.optim.SGD(model.parameters(), lr=config['learning_rate'], momentum=0.9, weight_decay=5e-4)
+    # optimizer = torch.optim.LARS(model.parameters(), lr=config['learning_rate'], momentum=0.9)
     # lr_scheduler_decay = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
     lr_scheduler_decay = torch.optim.lr_scheduler.OneCycleLR(optimizer, config['learning_rate'], epochs=config['epochs'], 
-                                                steps_per_epoch=len(train_loader))
+                                               steps_per_epoch=len(train_loader))
     # Loss Function
     loss_fn = CrossEntropyLoss()
 
@@ -160,8 +162,8 @@ def train(config):
                 test_acc += int(torch.sum(test_pred == ytest))
             ep_test_acc = test_acc / LEN_TEST
         
-        # lr_scheduler_decay.step()
-        adjust_learning_rate(config, optimizer, epoch)
+        lr_scheduler_decay.step()
+        # adjust_learning_rate(config, optimizer, epoch)
         
         end = time()
         duration = (end - start) / 60
