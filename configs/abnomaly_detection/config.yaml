@@ -1,0 +1,11 @@
+use_wandb: true
+dataset: cifar100
+wandb_project: cifar100
+# model_path: resnet/models/cifar100_SGD_0.04/epoch179_train0.99974_test0.7465.pt
+# # model_path: resnet/models/cifar10_ADAM/epoch39_train0.98982_test0.9154.pt
+# eps: 0.031
+# norm: L2
+# batch_size: 64
+# save_dir: auto_attack/outputs
+model_config:  configs/abnomaly_detection/config_padim.yaml
+model_weights: abnomaly_detect/models/padim/mvtec/model.ckpt
