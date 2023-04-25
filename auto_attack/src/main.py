@@ -71,8 +71,8 @@ def attack(config):
     adv_complete = adversary.run_standard_evaluation(torch.tensor(rearrange(transformed_data, 'n s b d -> n d s b')).type(torch.FloatTensor),
                 torch.tensor(test_ds.targets), bs=config['batch_size'])
     
-    torch.save(adv_complete, '{}/{}_{}_individual_1_{}_eps_{:.5f}_plus_{}.pth'.format(
-                config['save_dir'], 'aa', 1, 10000, config['eps'], config['dataset']))
+    torch.save(adv_complete, '{}/{}_{}_individual_1_{}_eps_{:.5f}_norm_{}_plus_{}.pth'.format(
+                config['save_dir'], 'aa', 1, 10000, config['eps'], config['norm'], config['dataset']))
     # idx = 0
     # with torch.no_grad():
     #     # for xtest, ytest in zip(x_adv, test_ds.targets):

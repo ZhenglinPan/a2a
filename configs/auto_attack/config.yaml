@@ -3,7 +3,8 @@ dataset: cifar100
 wandb_project: cifar100
 model_path: resnet/models/cifar100_SGD_0.04/epoch179_train0.99974_test0.7465.pt
 # model_path: resnet/models/cifar10_ADAM/epoch39_train0.98982_test0.9154.pt
+data_path: auto_attack/outputs/aa_1_individual_1_10000_eps_0.03100_norm_Linf_plus_cifar100.pth
 eps: 0.031
 norm: L2
-batch_size: 64
+batch_size: 1
 save_dir: auto_attack/outputs

@@ -133,7 +133,7 @@ def get_loaders(dataset, label_class, batch_size, backbone):
         print('Unsupported Dataset')
         exit()
 
-def get_alllabel_loaders(dataset, batch_size, backbone):
+def get_alllabel_loaders(dataset, batch_size, backbone, attacked_data_file):
     if dataset == "cifar10":
         ds = torchvision.datasets.CIFAR10
         transform = transform_color if backbone == 152 else transform_resnet18
@@ -142,7 +142,37 @@ def get_alllabel_loaders(dataset, batch_size, backbone):
         testset = ds(root='data', train=False, download=True, transform=transform, **coarse)
         trainset_1 = ds(root='data', train=True, download=True, transform=Transform(), **coarse)
 
-        attacked_data = torch.load('aa_1_individual_1_10000_eps_0.03100_plus_cifar10.pth')
+        attacked_data = torch.load(attacked_data_file)
+        attacked_data_np = attacked_data.numpy()
+        attacked_data_np = rearrange(attacked_data_np, 'n s b d -> n b d s')
+
+        transformed_data = testset.data
+        mean = numpy.mean(transformed_data, axis=(0, 1, 2))
+        std = numpy.std(transformed_data, axis=(0, 1, 2))
+        attacked_data_np = attacked_data_np * std + mean
+        testset.data = numpy.concatenate((testset.data, attacked_data_np.astype(np.uint8)), axis = 0)
+
+
+        testset.targets = [0 for t in range(10000)] + [1 for t in range(10000)]
+
+        trainset.targets = [1 for i in range(50000)]
+        trainset_1.targets = [1 for i in range(50000)]
+
+        train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2,
+                                                   drop_last=False)
+        test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2,
+                                                  drop_last=False)
+        return train_loader, test_loader, torch.utils.data.DataLoader(trainset_1, batch_size=batch_size,
+                                                                      shuffle=True, num_workers=2, drop_last=False)
+    if dataset == "cifar100":
+        ds = torchvision.datasets.CIFAR100
+        transform = transform_color if backbone == 152 else transform_resnet18
+        coarse = {}
+        trainset = ds(root='data', train=True, download=True, transform=transform, **coarse)
+        testset = ds(root='data', train=False, download=True, transform=transform, **coarse)
+        trainset_1 = ds(root='data', train=True, download=True, transform=Transform(), **coarse)
+
+        attacked_data = torch.load(attacked_data_file)
         attacked_data_np = attacked_data.numpy()
         attacked_data_np = rearrange(attacked_data_np, 'n s b d -> n b d s')
 
