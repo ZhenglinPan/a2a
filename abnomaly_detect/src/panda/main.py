@@ -1,75 +1,51 @@
+import numpy as np
 import torch
 from sklearn.metrics import roc_auc_score
 import torch.optim as optim
 import argparse
+from losses import CompactnessLoss, EWCLoss
 import utils
+from copy import deepcopy
 from tqdm import tqdm
-import torch.nn.functional as F
 
-
-def contrastive_loss(out_1, out_2):
-    out_1 = F.normalize(out_1, dim=-1)
-    out_2 = F.normalize(out_2, dim=-1)
-    bs = out_1.size(0)
-    temp = 0.25
-    # [2*B, D]
-    out = torch.cat([out_1, out_2], dim=0)
-    # [2*B, 2*B]
-    sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / temp)
-    mask = (torch.ones_like(sim_matrix) - torch.eye(2 * bs, device=sim_matrix.device)).bool()
-    # [2B, 2B-1]
-    sim_matrix = sim_matrix.masked_select(mask).view(2 * bs, -1)
-
-    # compute loss
-    pos_sim = torch.exp(torch.sum(out_1 * out_2, dim=-1) / temp)
-    # [2*B]
-    pos_sim = torch.cat([pos_sim, pos_sim], dim=0)
-    loss = (- torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
-    return loss
-
-
-def train_model(model, train_loader, test_loader, train_loader_1, device, args):
+def train_model(model, train_loader, test_loader, device, args, ewc_loss):
     model.eval()
     auc, feature_space = get_score(model, device, train_loader, test_loader)
     print('Epoch: {}, AUROC is: {}'.format(0, auc))
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.00005)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=0.00005, momentum=0.9)
     center = torch.FloatTensor(feature_space).mean(dim=0)
-    if args.angular:
-        center = F.normalize(center, dim=-1)
-    center = center.to(device)
+    criterion = CompactnessLoss(center.to(device))
     for epoch in range(args.epochs):
-        running_loss = run_epoch(model, train_loader_1, optimizer, center, device, args.angular)
+        running_loss = run_epoch(model, train_loader, optimizer, criterion, device, args.ewc, ewc_loss)
         print('Epoch: {}, Loss: {}'.format(epoch + 1, running_loss))
-        auc, _ = get_score(model, device, train_loader, test_loader)
-        print('Epoch: {}, AUROC is: {}'.format(epoch + 1, auc))
+        auc, acc, feature_space = get_score(model, device, train_loader, test_loader)
+        print('Epoch: {}, AUROC is: {} Accuracy is {}'.format(epoch + 1, auc, acc))
 
 
-def run_epoch(model, train_loader, optimizer, center, device, is_angular):
-    total_loss, total_num = 0.0, 0
-    for ((img1, img2), _) in tqdm(train_loader, desc='Train...'):
+def run_epoch(model, train_loader, optimizer, criterion, device, ewc, ewc_loss):
+    running_loss = 0.0
+    for i, (imgs, _) in enumerate(train_loader):
 
-        img1, img2 = img1.to(device), img2.to(device)
+        images = imgs.to(device)
 
         optimizer.zero_grad()
 
-        out_1 = model(img1)
-        out_2 = model(img2)
-        out_1 = out_1 - center
-        out_2 = out_2 - center
+        _, features = model(images)
 
-        loss = contrastive_loss(out_1, out_2)
+        loss = criterion(features)
 
-        if is_angular:
-            loss += ((out_1 ** 2).sum(dim=1).mean() + (out_2 ** 2).sum(dim=1).mean())
+        if ewc:
+            loss += ewc_loss(model)
 
         loss.backward()
 
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1e-3)
+
         optimizer.step()
 
-        total_num += img1.size(0)
-        total_loss += loss.item() * img1.size(0)
+        running_loss += loss.item()
 
-    return total_loss / (total_num)
+    return running_loss / (i + 1)
 
 
 def get_score(model, device, train_loader, test_loader):
@@ -77,51 +53,58 @@ def get_score(model, device, train_loader, test_loader):
     with torch.no_grad():
         for (imgs, _) in tqdm(train_loader, desc='Train set feature extracting'):
             imgs = imgs.to(device)
-            features = model(imgs)
+            _, features = model(imgs)
             train_feature_space.append(features)
         train_feature_space = torch.cat(train_feature_space, dim=0).contiguous().cpu().numpy()
     test_feature_space = []
-    test_labels = []
     with torch.no_grad():
-        for (imgs, labels) in tqdm(test_loader, desc='Test set feature extracting'):
+        for (imgs, _) in tqdm(test_loader, desc='Test set feature extracting'):
             imgs = imgs.to(device)
-            features = model(imgs)
+            _, features = model(imgs)
             test_feature_space.append(features)
-            test_labels.append(labels)
         test_feature_space = torch.cat(test_feature_space, dim=0).contiguous().cpu().numpy()
-        test_labels = torch.cat(test_labels, dim=0).cpu().numpy()
+        test_labels = test_loader.dataset.targets
 
     distances = utils.knn_score(train_feature_space, test_feature_space)
 
     auc = roc_auc_score(test_labels, distances)
 
-    return auc, train_feature_space
+    acc = utils.knn_accuracy(train_feature_space, test_feature_space, test_labels)
+    return auc, acc, train_feature_space
 
 def main(args):
     print('Dataset: {}, Normal Label: {}, LR: {}'.format(args.dataset, args.label, args.lr))
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(device)
-    model = utils.Model(args.backbone)
+    model = utils.get_resnet_model(resnet_type=args.resnet_type)
     model = model.to(device)
 
-    # train_loader, test_loader, train_loader_1 = utils.get_loaders(dataset=args.dataset, label_class=args.label, batch_size=args.batch_size, backbone=args.backbone)
+    ewc_loss = None
 
+    # Freezing Pre-trained model for EWC
+    if args.ewc:
+        frozen_model = deepcopy(model).to(device)
+        frozen_model.eval()
+        utils.freeze_model(frozen_model)
+        fisher = torch.load(args.diag_path)
+        ewc_loss = EWCLoss(frozen_model, fisher)
 
-    train_loader, test_loader, train_loader_1 = utils.get_alllabel_loaders(dataset=args.dataset, batch_size=args.batch_size, backbone=args.backbone, attacked_data_file = args.attacked_data_file)
-
-    train_model(model, train_loader, test_loader, train_loader_1, device, args)
-
-    torch.save(model.state_dict(), "msad.pt")
+    utils.freeze_parameters(model)
+    train_loader, test_loader = utils.get_all_loaders(dataset=args.dataset, batch_size=args.batch_size, attacked_data_file = args.attacked_data_file)
+    train_model(model, train_loader, test_loader, device, args, ewc_loss)
+    torch.save(model.state_dict(), f'panda_{args.dataset}.pt')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--dataset', default='cifar10')
-    parser.add_argument('--epochs', default=20, type=int, metavar='epochs', help='number of epochs')
+    parser.add_argument('--diag_path', default='./data/fisher_diagonal.pth', help='fim diagonal path')
+    parser.add_argument('--ewc', action='store_true', help='Train with EWC')
+    parser.add_argument('--epochs', default=15, type=int, metavar='epochs', help='number of epochs')
     parser.add_argument('--label', default=0, type=int, help='The normal class')
-    parser.add_argument('--lr', type=float, default=1e-5, help='The initial learning rate.')
-    parser.add_argument('--batch_size', default=64, type=int)
-    parser.add_argument('--backbone', default=152, type=int, help='ResNet 18/152')
-    parser.add_argument('--angular', action='store_true', help='Train with angular center loss')
+    parser.add_argument('--lr', type=float, default=1e-2, help='The initial learning rate.')
+    parser.add_argument('--resnet_type', default=152, type=int, help='which resnet to use')
+    parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--attacked_data_file', default='aa_1_individual_1_10000_eps_0.03100_plus_cifar10.pth',type=str, help='attacked_data_file')
     args = parser.parse_args()
+
     main(args)
