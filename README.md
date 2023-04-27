@@ -19,6 +19,8 @@ In `abnormaly_detect`, clean training images $I^{train}_{c}$ is fed into the alg
 conda create --name env_name python=3.8
 source activate env_name
 # install torch by yourself, there is no torch in the requirements.txt
+pip install git+https://github.com/fra31/auto-attack
+pip install wandb
 pip install -r requirements.txt
 ```
 ## ResNet Training
