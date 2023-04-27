@@ -155,8 +155,8 @@ def get_alllabel_loaders(dataset, batch_size, backbone, attacked_data_file):
 
         testset.targets = [0 for t in range(10000)] + [1 for t in range(10000)]
 
-        trainset.targets = [1 for i in range(50000)]
-        trainset_1.targets = [1 for i in range(50000)]
+        trainset.targets = [0 for i in range(50000)]
+        trainset_1.targets = [0 for i in range(50000)]
 
         train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2,
                                                    drop_last=False)
@@ -185,8 +185,8 @@ def get_alllabel_loaders(dataset, batch_size, backbone, attacked_data_file):
 
         testset.targets = [0 for t in range(10000)] + [1 for t in range(10000)]
 
-        trainset.targets = [1 for i in range(50000)]
-        trainset_1.targets = [1 for i in range(50000)]
+        trainset.targets = [0 for i in range(50000)]
+        trainset_1.targets = [0 for i in range(50000)]
 
         train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2,
                                                    drop_last=False)

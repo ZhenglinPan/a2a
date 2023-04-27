@@ -7,6 +7,7 @@ import ResNet
 from einops import rearrange
 import numpy
 from sklearn.neighbors import NearestNeighbors
+from sklearn.metrics.pairwise import cosine_similarity
 
 mvtype = ['bottle', 'cable', 'capsule', 'carpet', 'grid', 'hazelnut', 'leather',
           'metal_nut', 'pill', 'screw', 'tile', 'toothbrush', 'transistor',
@@ -72,16 +73,20 @@ def knn_accuracy(train_set, test_set, labels, n_neighbours=2):
     """
     Calculates the KNN distance
     """
-    nn = NearestNeighbors(n_neighbors=n_neighbours)
-    nn.fit(train_set)
+    # nn = NearestNeighbors(n_neighbors=n_neighbours)
+    # nn.fit(train_set)
     result = []
     for idx, test_case in enumerate(test_set):
         input = np.expand_dims(test_case, axis=0)
-        distance, indices = nn.kneighbors(input)
-        threshold = distance.max() * 0.5
-        result.append(1 if distance.min() <= threshold else 0)
+        # distance, indices = nn.kneighbors(input)
+        # threshold = distance.max() * 0.5
+        # result.append(1 if distance.min() <= threshold else 0)
+        similarities = cosine_similarity(test_case.reshape(1, -1), train_set)
+        max_similarity = np.max(similarities)
+        result.append(0 if max_similarity >= 0.8 else 1)
+        
     result = np.array(result)
-    matches = np.count_nonzero(np.array_equal(result, labels))
+    matches = np.count_nonzero(np.array_equal(result, np.array(labels)))
     return matches / len(labels)
 
 def get_outliers_loader(batch_size):
@@ -109,7 +114,7 @@ def get_all_loaders(dataset, batch_size, attacked_data_file):
             attacked_data_np = attacked_data_np * std + mean
             testset.data = numpy.concatenate((testset.data, attacked_data_np.astype(np.uint8)), axis = 0)
             testset.targets = [0 for t in range(10000)] + [1 for t in range(10000)]
-            trainset.targets = [1 for i in range(50000)]
+            trainset.targets = [0 for i in range(50000)]
         elif dataset == "cifar100":
             ds = torchvision.datasets.CIFAR100
             transform = transform_color
@@ -128,7 +133,7 @@ def get_all_loaders(dataset, batch_size, attacked_data_file):
             attacked_data_np = attacked_data_np * std + mean
             testset.data = numpy.concatenate((testset.data, attacked_data_np.astype(np.uint8)), axis = 0)
             testset.targets = [0 for t in range(10000)] + [1 for t in range(10000)]
-            trainset.targets = [1 for i in range(50000)]
+            trainset.targets = [0 for i in range(50000)]
         train_loader = torch.utils.data.DataLoader(trainset, batch_size=batch_size, shuffle=True, num_workers=2, drop_last=False)
         test_loader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=False, num_workers=2, drop_last=False)
         return train_loader, test_loader

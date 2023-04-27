@@ -18,8 +18,8 @@ def train_model(model, train_loader, test_loader, device, args, ewc_loss):
     for epoch in range(args.epochs):
         running_loss = run_epoch(model, train_loader, optimizer, criterion, device, args.ewc, ewc_loss)
         print('Epoch: {}, Loss: {}'.format(epoch + 1, running_loss))
-        auc, acc, feature_space = get_score(model, device, train_loader, test_loader)
-        print('Epoch: {}, AUROC is: {} Accuracy is {}'.format(epoch + 1, auc, acc))
+        auc, feature_space = get_score(model, device, train_loader, test_loader)
+        print('Epoch: {}, AUROC is: {}'.format(epoch + 1, auc))
 
 
 def run_epoch(model, train_loader, optimizer, criterion, device, ewc, ewc_loss):
@@ -69,8 +69,8 @@ def get_score(model, device, train_loader, test_loader):
 
     auc = roc_auc_score(test_labels, distances)
 
-    acc = utils.knn_accuracy(train_feature_space, test_feature_space, test_labels)
-    return auc, acc, train_feature_space
+    # acc = utils.knn_accuracy(train_feature_space, test_feature_space, test_labels)
+    return auc, train_feature_space
 
 def main(args):
     print('Dataset: {}, Normal Label: {}, LR: {}'.format(args.dataset, args.label, args.lr))
