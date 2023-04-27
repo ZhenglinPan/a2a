@@ -18,6 +18,7 @@ In `abnormaly_detect`, clean training images $I^{train}_{c}$ is fed into the alg
 ```
 conda create --name env_name python=3.8
 source activate env_name
+# install torch by yourself, there is no torch in the requirements.txt
 pip install -r requirements.txt
 ```
 ## ResNet Training
@@ -46,15 +47,16 @@ CIFAR10 Linf https://drive.google.com/file/d/1bNFBZRdAl4uNPMrdlU9QC7Vr_ktaxLK5/v
 CIFAR100 Linf https://drive.google.com/file/d/1lQLOkVKrjWl8YHX1d-VhYqWtHIn3Hku_/view?usp=sharing  
 CIFAR10 L2 https://drive.google.com/file/d/1PPCYmUYMjmnNtbC2VWu4Xz9Z5fVycYTt/view?usp=sharing  
 CIFAR100 L2 https://drive.google.com/file/d/1uOJBBed_eQZQV9R4zbp1O9xC6BHvqY1W/view?usp=sharing  
+replace parameter `attacked_data_file` with the file you want to test  
 ### MSCL
 Code is based on repo https://github.com/talreiss/Mean-Shifted-Anomaly-Detection  
 ```
-python abnomaly_detect/src/msad/main.py --dataset=cifar10 --label=1 --backbone=152 --attacked_data_file=auto_attack/outputs/aa_1_individual_1_10000_eps_0.03100_plus_cifar10.pth 
+python abnomaly_detect/src/msad/main.py --dataset=cifar10 --label=1 --backbone=152 --attacked_data_file auto_attack/outputs/aa_1_individual_1_10000_eps_0.03100_plus_cifar10.pth 
 ```
 ### PANDA
 Code is based on repo https://github.com/talreiss/PANDA  
 ```
-python abnomaly_detect/src/panda/main.py --dataset=cifar10 --label=1 --resnet_type=152 --ewc --diag_path=abnomaly_detect/data/fisher_diagonal.pth --attacked_data_file=auto_attack/outputs/aa_1_individual_1_10000_eps_0.03100_plus_cifar10.pth
+python abnomaly_detect/src/panda/main.py --dataset=cifar10 --label=1 --resnet_type=152 --ewc --diag_path=abnomaly_detect/data/fisher_diagonal.pth --attacked_data_file auto_attack/outputs/aa_1_individual_1_10000_eps_0.03100_plus_cifar10.pth
 ``` 
 ### FITYMI
 Code is based on repo https://github.com/rohban-lab/fitymi  
